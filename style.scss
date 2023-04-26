@@ -1,3 +1,114 @@
+$cell-width: 1.5em;
+
+.content {
+  display: flex;
+  justify-content: center;
+}
+
+.crossword {
+  border-radius: 3px;
+  font-size: 3em;
+  display: grid;
+  grid-template-columns: repeat(var(--columns), $cell-width);
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  gap: 1px;
+  background-color: var(--black);
+  cursor: pointer;
+}
+
+.cell {
+  user-select: none;
+  box-sizing: border-box;
+  display: grid;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+  height: $cell-width;
+  background-color: var(--surface);
+
+  > * {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  &.caret {
+    background-color: var(--surface2);
+  }
+
+  &.empty {
+    background-color: var(--black);
+    cursor: default;
+  }
+}
+
+.decoration {
+  margin: -1px;
+  box-sizing: border-box;
+  width: $cell-width;
+  height: 100%;
+}
+
+.focused .decoration {
+  border-style: solid;
+  border-width: 3px;
+}
+
+.focused .decoration {
+  border-color: var(--accent);
+}
+
+// Remove borders between focused cells in across entry mode
+.crossword[across-entry-mode] {
+  .focused ~ .focused .decoration {
+    border-left-width: 0px;
+  }
+
+  .focused:not(.focused ~ .focused) .decoration,
+  .focused ~ .focused:not(.last-focused) .decoration {
+    border-right-width: 0px;
+  }
+}
+
+// Remove borders between focused cells in down entry mode
+.crossword:not([across-entry-mode]) {
+  .focused ~ .focused .decoration {
+    border-top-width: 0px;
+  }
+
+  .focused:not(.focused ~ .focused) .decoration,
+  .focused ~ .focused:not(.last-focused) .decoration {
+    border-bottom-width: 0px;
+  }
+}
+
+.answer-id {
+  align-self: start;
+  font-size: 0.3em;
+  padding: 0.3em;
+}
+
+.letter {
+  justify-self: center;
+
+  &.animate {
+    animation: 0.5s anim-popoutin;
+  }
+}
+
 body {
   font-family: "Roboto", sans-serif;
+  background-color: var(--background);
+  color: var(--text);
+}
+
+@keyframes anim-popoutin {
+  0% {
+    transform: scale(0.7);
+  }
+  25% {
+    transform: scale(1);
+  }
 }
