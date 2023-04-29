@@ -1,86 +1,108 @@
-$cell-width: 1.5em;
+* {
+  box-sizing: border-box;
+}
+
+body {
+  height: 100vh;
+  margin: 0px;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
 
 .content {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
+  padding: 32px;
+  width: 70%;
+}
+
+.header {
+  display: flex;
+  width: 100%;
+}
+
+.dialog {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  animation-name: fade;
+  animation-duration: 300ms;
+  width: 100%;
+  height: 100%;
+  position: fixed;
+  z-index: 1000;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.dialog-content {
+  opacity: 1;
+  background-color: var(--surface);
+  color: inherit;
+  border-radius: 8px;
+  padding: 32px;
+}
+
+@keyframes fade {
+  from {
+    background-color: rgba(0, 0, 0, 0);
+    backdrop-filter: blur(0px);
+  }
+  to {
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+  }
 }
 
 .crossword {
-  border-radius: 3px;
+  box-sizing: content-box;
+  --cell-width: 1.5em;
+  border-radius: 8px;
   font-size: 3em;
-  display: grid;
-  grid-template-columns: repeat(var(--columns), $cell-width);
-  width: fit-content;
-  align-items: center;
-  justify-content: center;
-  padding: 3px;
-  gap: 1px;
+  padding: 8px;
+  width: calc(1px + (var(--cell-width) + 1px) * var(--columns));
+  height: calc(1px + (var(--cell-width) + 1px) * var(--rows));
   background-color: var(--black);
-  cursor: pointer;
+  // border-color: var(--black);
+  // border-style:solid;
+  // border-width:8px;
+  // cursor: pointer;
+}
+
+.grid-position {
+  position: absolute;
+  margin-left: calc(1px + (var(--cell-width) + 1px) * var(--x));
+  margin-top: calc(1px + (var(--cell-width) + 1px) * var(--y));
 }
 
 .cell {
+  cursor: pointer;
+  box-sizing: border-box;
   user-select: none;
   box-sizing: border-box;
   display: grid;
   align-items: center;
   justify-content: center;
   text-transform: uppercase;
-  height: $cell-width;
-  background-color: var(--surface);
+  height: var(--cell-width);
+  width: var(--cell-width);
+  background-color: var(--background);
+  position: absolute;
+  outline: none;
 
   > * {
+    width: var(--cell-width);
     grid-column: 1;
     grid-row: 1;
-  }
-
-  &.caret {
-    background-color: var(--surface2);
-  }
-
-  &.empty {
-    background-color: var(--black);
-    cursor: default;
-  }
-}
-
-.decoration {
-  margin: -1px;
-  box-sizing: border-box;
-  width: $cell-width;
-  height: 100%;
-}
-
-.focused .decoration {
-  border-style: solid;
-  border-width: 3px;
-}
-
-.focused .decoration {
-  border-color: var(--accent);
-}
-
-// Remove borders between focused cells in across entry mode
-.crossword[across-entry-mode] {
-  .focused ~ .focused .decoration {
-    border-left-width: 0px;
-  }
-
-  .focused:not(.focused ~ .focused) .decoration,
-  .focused ~ .focused:not(.last-focused) .decoration {
-    border-right-width: 0px;
-  }
-}
-
-// Remove borders between focused cells in down entry mode
-.crossword:not([across-entry-mode]) {
-  .focused ~ .focused .decoration {
-    border-top-width: 0px;
-  }
-
-  .focused:not(.focused ~ .focused) .decoration,
-  .focused ~ .focused:not(.last-focused) .decoration {
-    border-bottom-width: 0px;
   }
 }
 
@@ -88,14 +110,63 @@ $cell-width: 1.5em;
   align-self: start;
   font-size: 0.3em;
   padding: 0.3em;
+  z-index: 1;
 }
 
 .letter {
-  justify-self: center;
+  z-index: 1;
+  text-align: center;
 
-  &.animate {
-    animation: 0.5s anim-popoutin;
+  &.enter {
+    animation: 100ms letter-pop;
   }
+}
+
+.slot {
+  width: var(--cell-width);
+  height: var(--cell-width);
+  box-sizing: border-box;
+  pointer-events: none;
+  border-style: solid;
+  border-width: 3px;
+  border-color: var(--accent);
+  pointer-events: none;
+  border-radius: 3px;
+  padding: 3px;
+
+  &.enter {
+    animation-duration: 100ms;
+    animation-name: slot-extend;
+  }
+
+  &:not(.enter) {
+    transition-duration: 100ms;
+    transition-property: margin-top margin-left;
+  }
+
+  &.across {
+    width: calc((var(--cell-width) + 1px) * var(--length) - 1px);
+  }
+
+  &:not(.across) {
+    height: calc((var(--cell-width) + 1px) * var(--length) - 1px);
+  }
+}
+
+.caret {
+  pointer-events: none;
+  width: var(--cell-width);
+  height: var(--cell-width);
+  background-color: var(--surface);
+  transition-duration: 100ms;
+}
+
+.crossword[across-entry-mode] .caret.hide {
+  width: 0px;
+}
+
+.crossword:not([across-entry-mode]) .caret.hide {
+  height: 0px;
 }
 
 body {
@@ -104,11 +175,20 @@ body {
   color: var(--text);
 }
 
-@keyframes anim-popoutin {
-  0% {
+@keyframes letter-pop {
+  from {
     transform: scale(0.7);
   }
-  25% {
+  to {
     transform: scale(1);
+  }
+}
+
+@keyframes slot-extend {
+  from {
+    margin-left: calc(1px + (var(--cell-width) + 1px) * var(--caret-x));
+    margin-top: calc(1px + (var(--cell-width) + 1px) * var(--caret-y));
+    width: var(--cell-width);
+    height: var(--cell-width);
   }
 }
