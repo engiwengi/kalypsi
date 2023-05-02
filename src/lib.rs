@@ -10,8 +10,8 @@ use wasm_bindgen::JsCast;
 use web_sys::{Element, Event, FocusEvent, KeyboardEvent};
 
 const STORAGE_KEY: &str = "kalypsi";
-const DEFAULT_WIDTH: usize = 7;
-const DEFAULT_HEIGHT: usize = 7;
+const DEFAULT_WIDTH: usize = 5;
+const DEFAULT_HEIGHT: usize = 5;
 
 #[derive(PartialEq)]
 struct Store {
@@ -55,8 +55,8 @@ impl Theme {
     }
 }
 
-impl Default for Theme {
-    fn default() -> Self {
+impl Theme {
+    fn catpuccin_mocha() -> Self {
         Self {
             background: "#1e1e2e".to_owned(),
             primary: "#f38ba8".to_owned(),
@@ -66,6 +66,24 @@ impl Default for Theme {
             surface: "#585b70".to_owned(),
             surface2: "#6c7086".to_owned(),
         }
+    }
+
+    fn catpuccin_latte() -> Self {
+        Self {
+            background: "#dce0e8".to_owned(),
+            primary: "#f38ba8".to_owned(),
+            accent: "#1e66f5".to_owned(),
+            black: "#11111b".to_owned(),
+            text: "#4c4f69".to_owned(),
+            surface: "#acb0be".to_owned(),
+            surface2: "#9ca0b0".to_owned(),
+        }
+    }
+}
+
+impl Default for Theme {
+    fn default() -> Self {
+        Self::catpuccin_mocha()
     }
 }
 
@@ -109,6 +127,12 @@ impl Crossword {
                 val
             })
         }
+    }
+
+    fn cell_exists(&self) -> impl Fn((usize, usize)) -> bool + Copy {
+        let grid = self.grid;
+
+        move |coord: (usize, usize)| grid.with(|grid| grid.get(coord).and_then(|&c| c).is_some())
     }
 
     fn get_slot(&self) -> impl Fn((usize, usize), bool) -> Option<Slot> + Copy {
@@ -243,6 +267,7 @@ impl<'a> BoolMatrix for &'a Grid {
 #[derive(PartialEq, Copy, Clone)]
 struct Selection {
     active_slot: RwSignal<Option<Slot>>,
+    default_is_across: Memo<bool>,
 }
 
 #[derive(PartialEq, Clone, Copy, Debug, Eq)]
@@ -255,8 +280,14 @@ pub struct Slot {
 
 impl Selection {
     fn new(cx: Scope) -> Self {
+        let active_slot = create_rw_signal(cx, None);
         Self {
-            active_slot: create_rw_signal(cx, None),
+            active_slot,
+            default_is_across: create_memo(cx, move |prev| {
+                active_slot()
+                    .map(|slot| slot.is_across)
+                    .unwrap_or_else(|| prev.copied().unwrap_or(true))
+            }),
         }
     }
 
@@ -305,20 +336,28 @@ impl Selection {
         move || active_slot().map_or(true, |a| a.caret_position >= a.len)
     }
 
-    fn click_cell<S>(&self, get_slot: S) -> impl Fn((usize, usize)) + Copy
+    fn click_cell<S, C>(&self, get_slot: S, cell_exists: C) -> impl Fn((usize, usize)) + Copy
     where
         S: Fn((usize, usize), bool) -> Option<Slot> + Copy,
+        C: Fn((usize, usize)) -> bool + Copy,
     {
         let existing_selection = self.active_slot_and_caret_cell();
         let active_slot = self.active_slot;
+        let default_is_across = self.default_is_across;
 
         move |coord: (usize, usize)| {
+            if !cell_exists(coord) {
+                return;
+            }
+
             let existing_selection = existing_selection();
 
-            let use_across =
-                existing_selection.map_or(true, |(existing_active_slot, caret_cell)| {
+            let use_across = existing_selection.map_or_else(
+                default_is_across,
+                |(existing_active_slot, caret_cell)| {
                     (caret_cell != coord) == existing_active_slot.is_across
-                });
+                },
+            );
 
             let new_slot = match (get_slot(coord, true), get_slot(coord, false)) {
                 (Some(slot), _) if use_across => Some(slot),
@@ -329,15 +368,8 @@ impl Selection {
 
             if new_slot != existing_selection.map(|c| c.0) {
                 active_slot.set(new_slot);
+                default_is_across();
             }
-
-            // if let Some(new_slot) = new_slot {
-            //     caret_position.set(if new_slot.is_across {
-            //         coord.0 - new_slot.head.0
-            //     } else {
-            //         coord.1 - new_slot.head.1
-            //     });
-            // }
         }
     }
 
@@ -442,6 +474,9 @@ pub fn App(cx: Scope) -> impl IntoView {
     };
     let advance_caret = selection.advance_caret();
     let retreat_caret = selection.retreat_caret();
+    let get_slot = crossword.get_slot();
+    let cell_exists = crossword.cell_exists();
+    let click_cell = selection.click_cell(get_slot, cell_exists);
 
     let press_keydown = move |ev: Event| {
         let ev = ev.dyn_into::<KeyboardEvent>().unwrap();
@@ -477,6 +512,44 @@ pub fn App(cx: Scope) -> impl IntoView {
                 ev.prevent_default();
                 next_word();
             }
+            "ArrowRight" => {
+                ev.prevent_default();
+                if let Some(selected_cell) = caret_cell() {
+                    let new_cell = (selected_cell.0 + 1, selected_cell.1);
+                    click_cell(new_cell);
+                }
+            }
+            "ArrowLeft" => {
+                ev.prevent_default();
+                if let Some(selected_cell) = caret_cell() {
+                    if selected_cell.0 > 0 {
+                        let new_cell = (selected_cell.0 - 1, selected_cell.1);
+                        click_cell(new_cell);
+                    }
+                }
+            }
+            "ArrowUp" => {
+                ev.prevent_default();
+                if let Some(selected_cell) = caret_cell() {
+                    if selected_cell.1 > 0 {
+                        let new_cell = (selected_cell.0, selected_cell.1 - 1);
+                        click_cell(new_cell);
+                    }
+                }
+            }
+            "ArrowDown" => {
+                ev.prevent_default();
+                if let Some(selected_cell) = caret_cell() {
+                    let new_cell = (selected_cell.0, selected_cell.1 + 1);
+                    click_cell(new_cell);
+                }
+            }
+            "Control" => {
+                ev.prevent_default();
+                if let Some(selected_cell) = caret_cell() {
+                    click_cell(selected_cell);
+                }
+            }
             _ => {
                 console_log(&ev.key());
             }
@@ -489,7 +562,7 @@ pub fn App(cx: Scope) -> impl IntoView {
         <div class="app">
             <div class="content">
                 <Header/>
-                <Crossword on:focusout=remove_selection />
+                <Crossword on:focusout=remove_selection/>
             </div>
             <Dialog/>
         </div>
@@ -517,11 +590,16 @@ pub fn Crossword(cx: Scope) -> impl IntoView {
     let caret_cell = Signal::derive(cx, selection.caret_cell());
     let is_across = selection.is_across();
 
-    let click_cell = selection.click_cell(crossword.get_slot());
+    let click_cell = selection.click_cell(crossword.get_slot(), crossword.cell_exists());
 
     view! { cx,
         <div class="crossword" style=style across-entry-mode=is_across>
-            <Cells cells=cells answer_id_at=answer_id_at click_cell=click_cell caret_cell=caret_cell/>
+            <Cells
+                cells=cells
+                answer_id_at=answer_id_at
+                click_cell=click_cell
+                caret_cell=caret_cell
+            />
             <Caret position=caret_cell hide=hide_caret/>
             <ActiveSlot position=active_slot/>
         </div>
@@ -547,7 +625,6 @@ where
             view=move |cx, (position, cell)| {
                 cell.map(|cell| {
                     let answer_id = Signal::derive(cx, move || answer_id_at(position));
-
                     view! { cx,
                         <Letter
                             on:click=move |ev| click_cell(position)
@@ -627,9 +704,9 @@ pub fn ActiveSlot<C>(cx: Scope, position: C) -> impl IntoView
 where
     C: Fn() -> Option<Slot> + 'static + Copy,
 {
-    let stop_animate = create_rw_signal(cx, ());
-    let animate_memo = create_memo::<(Option<Slot>, bool)>(cx, move |prev_position| {
-        stop_animate();
+    let entered = create_rw_signal(cx, ());
+    let is_entering = create_memo::<(Option<Slot>, bool)>(cx, move |prev_position| {
+        entered();
         let position = position();
 
         match (position, prev_position.and_then(|p| p.0)) {
@@ -641,11 +718,11 @@ where
         }
     });
 
-    let remove_animation = move |_| {
-        stop_animate.set(());
+    let after_enter = move |_| {
+        entered.set(());
     };
 
-    let enter = move || animate_memo.get().1;
+    let is_entering = move || is_entering.get().1;
 
     let style = move || {
         if let Some(slot) = position() {
@@ -668,15 +745,14 @@ where
     let across = move || position().map_or(false, |v| v.is_across);
 
     view! { cx,
-        <Show when=has_position fallback=move |cx| view!{ cx, }>
-        <div
-            style=style
-            class:slot=has_position
-            class:grid-position=has_position
-            class:across=across
-            class:enter=enter
-            on:animationend=remove_animation
-        ></div>
+        <Show when=has_position fallback=|_| ()>
+            <div
+                style=style
+                class="slot grid-position"
+                class:across=across
+                class:enter=is_entering
+                on:animationend=after_enter
+            ></div>
         </Show>
     }
 }
@@ -697,13 +773,18 @@ where
     let has_position = move || position().is_some();
 
     view! { cx,
-        <Show when=has_position fallback=move |cx| view!{ cx, }>
-        <div
-            style=style
-            class:caret=has_position
-            class:grid-position=has_position
-            class:hide=hide
-        ></div>
+        <Show
+            when=has_position
+            fallback=move |cx| {
+                view! { cx,  }
+            }
+        >
+            <div
+                style=style
+                class:caret=has_position
+                class:grid-position=has_position
+                class:hide=hide
+            ></div>
         </Show>
     }
 }
