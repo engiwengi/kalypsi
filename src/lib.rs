@@ -10,7 +10,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{Element, Event, FocusEvent, KeyboardEvent};
 
 const STORAGE_KEY: &str = "kalypsi";
-const DEFAULT_WIDTH: usize = 5;
+const DEFAULT_WIDTH: usize = 15;
 const DEFAULT_HEIGHT: usize = 5;
 
 #[derive(PartialEq)]
@@ -685,7 +685,7 @@ pub fn Letter(
     let style = move || format!("--x:{};--y:{}", position.0, position.1);
 
     view! { cx,
-        <div tabindex=1 class="cell grid-position" style=style _ref=node_ref>
+        <div tabindex=1 class="cell" style=style _ref=node_ref>
             {move || {
                 answer_id()
                     .map(|id| {
@@ -748,7 +748,7 @@ where
         <Show when=has_position fallback=|_| ()>
             <div
                 style=style
-                class="slot grid-position"
+                class="slot"
                 class:across=across
                 class:enter=is_entering
                 on:animationend=after_enter
@@ -779,12 +779,7 @@ where
                 view! { cx,  }
             }
         >
-            <div
-                style=style
-                class:caret=has_position
-                class:grid-position=has_position
-                class:hide=hide
-            ></div>
+            <div style=style class="caret" class:hide=hide></div>
         </Show>
     }
 }
