@@ -9,9 +9,13 @@ use uuid::Uuid;
 use wasm_bindgen::JsCast;
 use web_sys::{Element, Event, FocusEvent, KeyboardEvent};
 
+use crate::generate::GridGenerator;
+
+pub mod generate;
+
 const STORAGE_KEY: &str = "kalypsi";
 const DEFAULT_WIDTH: usize = 15;
-const DEFAULT_HEIGHT: usize = 5;
+const DEFAULT_HEIGHT: usize = 15;
 
 #[derive(PartialEq)]
 struct Store {
@@ -116,6 +120,7 @@ impl Crossword {
         let grid = self.grid;
 
         move || {
+            console_log("redisplaying");
             grid.with(|grid| {
                 let val = grid
                     .cells
@@ -216,6 +221,16 @@ impl Grid {
         }
     }
 
+    fn black(&mut self, cell: (usize, usize), cx: Scope, black: bool) {
+        if let Some(l) = self.get_mut(cell) {
+            *l = match (*l, black) {
+                (_, true) => None,
+                (None, false) => Some(Cell::new(cx)),
+                (Some(c), false) => Some(c),
+            };
+        }
+    }
+
     fn toggle_cell(&mut self, cell: (usize, usize), cx: Scope) {
         if let Some(l) = self.get_mut(cell) {
             *l = match l {
@@ -251,16 +266,23 @@ impl Grid {
 }
 
 impl<'a> BoolMatrix for &'a Grid {
-    fn rows(&self) -> usize {
+    fn rows(self) -> usize {
         self.cells.len() / self.width
     }
 
-    fn cols(&self) -> usize {
+    fn cols(self) -> usize {
         self.width
     }
 
-    fn at(&self, cell: (usize, usize)) -> bool {
+    fn at(self, cell: (usize, usize)) -> bool {
         self.get(cell).map_or(false, |c| c.is_some())
+    }
+}
+
+impl<'a> TriBoolMatrix for &'a Grid {
+    fn maybe_at(self, cell: (usize, usize)) -> Option<bool> {
+        self.get(cell)
+            .and_then(|c| c.map(|c| c.letter.get() == ' '))
     }
 }
 
@@ -558,12 +580,27 @@ pub fn App(cx: Scope) -> impl IntoView {
 
     window_event_listener("keydown", press_keydown);
 
+    let fill_blacks = move |_| {
+        grid.update(move |grid| {
+            let mut grid_generator = GridGenerator::new(&*grid);
+
+            grid_generator.place_blacks(5.2..5.5, 40..73);
+
+            let cells = grid_generator.cells();
+            for (i, is_black) in cells.into_iter().enumerate() {
+                let coord = (i % grid.width, i / grid.width);
+                grid.black(coord, cx, is_black);
+            }
+        });
+    };
+
     view! { cx,
         <div class="app">
             <div class="content">
                 <Header/>
                 <Crossword on:focusout=remove_selection/>
             </div>
+            <button on:click=fill_blacks></button>
             <Dialog/>
         </div>
     }
@@ -583,7 +620,8 @@ pub fn Crossword(cx: Scope) -> impl IntoView {
     let crossword = use_context::<Crossword>(cx).expect("Parent did not provide crossword");
     let selection = use_context::<Selection>(cx).expect("Parent did not provide selection");
     let style = crossword.style();
-    let cells = Signal::derive(cx, crossword.display_cells());
+    let display_cells = crossword.display_cells();
+    let cells = Signal::derive(cx, display_cells);
     let answer_id_at = crossword.answer_id_at();
     let hide_caret = selection.hide_caret();
     let active_slot = selection.active_slot;
@@ -621,7 +659,7 @@ where
     view! { cx,
         <For
             each=cells
-            key=|a| a.1.map(|i| i.id)
+            key=|a| a.1.map_or_else(Uuid::new_v4, |i| i.id)
             view=move |cx, (position, cell)| {
                 cell.map(|cell| {
                     let answer_id = Signal::derive(cx, move || answer_id_at(position));
@@ -912,8 +950,14 @@ impl Answers {
     fn new(this: Option<&Self>, grid: &Grid) -> Self {
         console_log("creating answers");
         let mut answers = Vec::<Head>::with_capacity(this.map_or(0, |t| t.answers.len()));
+        let runs = find_runs(grid);
 
-        for (x, y, length, is_across) in find_runs(grid) {
+        let avg_len = runs.iter().fold(0, |acc, v| acc + v.2) as f32 / runs.len() as f32;
+        console_log(&format!("average word len: {}", avg_len));
+        let word_count = runs.len();
+        console_log(&format!("word count: {}", word_count));
+
+        for (x, y, length, is_across) in runs {
             let coord = (x, y);
 
             let new_head = match answers.iter_mut().find(|head| head.head == coord) {
@@ -988,10 +1032,14 @@ impl AnswerMap {
     }
 }
 
-trait BoolMatrix {
-    fn rows(&self) -> usize;
-    fn cols(&self) -> usize;
-    fn at(&self, cell: (usize, usize)) -> bool;
+pub trait TriBoolMatrix: BoolMatrix {
+    fn maybe_at(self, cell: (usize, usize)) -> Option<bool>;
+}
+
+pub trait BoolMatrix: Copy {
+    fn rows(self) -> usize;
+    fn cols(self) -> usize;
+    fn at(self, cell: (usize, usize)) -> bool;
 }
 
 fn find_runs<M>(m: M) -> Vec<(usize, usize, usize, bool)>
