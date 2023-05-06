@@ -46,7 +46,7 @@ body {
 
 .dialog-content {
   opacity: 1;
-  background-color: var(--surface);
+  background-color: var(--surface0);
   color: inherit;
   border-radius: 0.25em;
   padding: 32px;
@@ -81,15 +81,15 @@ body {
   grid-template-columns: repeat(var(--columns), var(--cell-width));
   grid-template-rows: repeat(var(--rows), var(--cell-width));
   gap: 1px;
-  border-radius: 0.125em;
+  // border-radius: 0.125em;
   font-size: min(
     calc(50vh / var(--rows)),
     min(calc(60vw / var(--columns)), 3em)
   );
-  background-color: var(--black);
-  border-color: var(--black);
-  border-style: solid;
-  border-width: 0.125em;
+  // background-color: var(--crust);
+  // border-color: var(--crust);
+  // border-style: solid;
+  // border-width: 0.125em;
 }
 
 .cell {
@@ -101,7 +101,7 @@ body {
   text-transform: uppercase;
   height: var(--cell-width);
   width: var(--cell-width);
-  background-color: var(--background);
+  background-color: var(--surface0);
   outline: none;
   grid-column: calc(var(--x) + 1);
   grid-row: calc(var(--y) + 1);
@@ -111,6 +111,22 @@ body {
     grid-column: 1;
     grid-row: 1;
   }
+
+  // &.corner-top-left {
+  //   border-top-left-radius: 0.125em;
+  // }
+  //
+  // &.corner-top-right {
+  //   border-top-right-radius: 0.125em;
+  // }
+  //
+  // &.corner-bottom-left {
+  //   border-bottom-left-radius: 0.125em;
+  // }
+  //
+  // &.corner-bottom-right {
+  //   border-bottom-right-radius: 0.125em;
+  // }
 }
 
 .answer-id {
@@ -136,17 +152,18 @@ body {
   pointer-events: none;
   border-style: solid;
   border-width: 3px;
-  border-color: var(--accent);
+  border-color: var(--cursor);
+  // opacity: 60%;
   pointer-events: none;
-  z-index: 3;
+  z-index: 2;
 
-  margin-left: calc((var(--cell-width) + 1px) * var(--x));
-  margin-top: calc((var(--cell-width) + 1px) * var(--y));
+  margin-left: calc((var(--cell-width) + 1px) * var(--x) - 1px);
+  margin-top: calc((var(--cell-width) + 1px) * var(--y) - 1px);
   margin-bottom: calc(
-    (var(--cell-width) + 1px) * calc(var(--rows) - var(--y) - 1)
+    (var(--cell-width) + 1px) * calc(var(--rows) - var(--y) - 1) - 1px
   );
   margin-right: calc(
-    (var(--cell-width) + 1px) * calc(var(--columns) - var(--x) - 1)
+    (var(--cell-width) + 1px) * calc(var(--columns) - var(--x) - 1) - 1px
   );
 
   &.enter {
@@ -162,23 +179,25 @@ body {
   &.across {
     margin-right: calc(
       (var(--cell-width) + 1px) *
-        calc(var(--columns) - var(--length) - var(--x))
+        calc(var(--columns) - var(--length) - var(--x)) - 1px
     );
   }
 
   &:not(.across) {
     margin-bottom: calc(
-      (var(--cell-width) + 1px) * calc(var(--rows) - var(--length) - var(--y))
+      (var(--cell-width) + 1px) * calc(var(--rows) - var(--length) - var(--y)) -
+        1px
     );
   }
 }
 
 .caret {
-  border-radius: 3px;
+  // border-radius: 3px;
   pointer-events: none;
   width: var(--cell-width);
   height: var(--cell-width);
-  background-color: var(--surface);
+  background-color: var(--surface2);
+  opacity: 60%;
   transition-duration: 100ms;
   grid-column: 1 / -1;
   grid-row: 1 / -1;
@@ -190,6 +209,7 @@ body {
   margin-right: calc(
     (var(--cell-width) + 1px) * calc(var(--rows) - var(--x) - 1)
   );
+  z-index: 1;
 }
 
 .crossword[across-entry-mode] .caret.hide {
@@ -202,7 +222,7 @@ body {
 
 body {
   font-family: "Roboto", sans-serif;
-  background-color: var(--background);
+  background-color: var(--base);
   color: var(--text);
 }
 
@@ -217,13 +237,14 @@ body {
 
 @keyframes slot-extend {
   from {
-    margin-left: calc((var(--cell-width) + 1px) * var(--caret-x));
-    margin-top: calc((var(--cell-width) + 1px) * var(--caret-y));
+    margin-left: calc((var(--cell-width) + 1px) * var(--caret-x) - 1px);
+    margin-top: calc((var(--cell-width) + 1px) * var(--caret-y) - 1px);
     margin-bottom: calc(
-      (var(--cell-width) + 1px) * calc(var(--rows) - var(--caret-y) - 1)
+      (var(--cell-width) + 1px) * calc(var(--rows) - var(--caret-y) - 1) - 1px
     );
     margin-right: calc(
-      (var(--cell-width) + 1px) * calc(var(--columns) - var(--caret-x) - 1)
+      (var(--cell-width) + 1px) * calc(var(--columns) - var(--caret-x) - 1) -
+        1px
     );
   }
 }

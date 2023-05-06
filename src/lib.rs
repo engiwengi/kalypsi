@@ -7,11 +7,13 @@ use std::{collections::HashMap, fmt::Display};
 use leptos::{html::Div, leptos_dom::console_log, *};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
-use web_sys::{Element, Event, FocusEvent, KeyboardEvent};
+use web_sys::{Element, Event, FocusEvent, KeyboardEvent, MouseEvent};
 
 use crate::generate::GridGenerator;
 
 pub mod generate;
+// pub mod state;
+// pub mod util;
 
 const STORAGE_KEY: &str = "kalypsi";
 const DEFAULT_WIDTH: usize = 15;
@@ -41,20 +43,27 @@ struct Crossword {
 }
 
 struct Theme {
-    black: String,
-    background: String,
-    primary: String,
-    accent: String,
-    text: String,
-    surface: String,
-    surface2: String,
+    rosewater: &'static str,
+    lavender: &'static str,
+    text: &'static str,
+    subtext1: &'static str,
+    subtext0: &'static str,
+    overlay2: &'static str,
+    overlay1: &'static str,
+    overlay0: &'static str,
+    surface2: &'static str,
+    surface1: &'static str,
+    surface0: &'static str,
+    base: &'static str,
+    crust: &'static str,
+    mantle: &'static str,
 }
 
 impl Theme {
     fn to_css(&self) -> String {
         format!(
-            "--background:{};--primary:{};--accent:{};--text:{};--black:{};--surface:{};--surface2:{}",
-            self.background, self.primary, self.accent, self.text, self.black, self.surface, self.surface2
+"--cursor:{};--text:{};--crust:{};--surface0:{};--surface1:{};--surface2:{};--overlay0:{};--overlay1:{};--overlay2:{};--subtext0:{};--subtext1:{};--base:{};--crust:{};--mantle:{};",
+            self.lavender, self.text, self.crust, self.surface0, self.surface1, self.surface2, self.overlay0, self.overlay1, self.overlay2, self.subtext0, self.subtext1, self.base, self.crust, self.mantle
         )
     }
 }
@@ -62,25 +71,58 @@ impl Theme {
 impl Theme {
     fn catpuccin_mocha() -> Self {
         Self {
-            background: "#1e1e2e".to_owned(),
-            primary: "#f38ba8".to_owned(),
-            accent: "#89b4fa".to_owned(),
-            black: "#11111b".to_owned(),
-            text: "#cdd6f4".to_owned(),
-            surface: "#585b70".to_owned(),
-            surface2: "#6c7086".to_owned(),
+            rosewater: "#f5e0dc",
+            lavender: "#b4befe",
+            text: "#cdd6f4",
+            subtext1: "#bac2de",
+            subtext0: "#a6adc8",
+            overlay2: "#9399b2",
+            overlay1: "#7f849c",
+            overlay0: "#6c7086",
+            surface2: "#585b70",
+            surface1: "#45475a",
+            surface0: "#313244",
+            base: "#1e1e2e",
+            mantle: "#181825",
+            crust: "#11111b",
         }
     }
 
     fn catpuccin_latte() -> Self {
         Self {
-            background: "#dce0e8".to_owned(),
-            primary: "#f38ba8".to_owned(),
-            accent: "#1e66f5".to_owned(),
-            black: "#11111b".to_owned(),
-            text: "#4c4f69".to_owned(),
-            surface: "#acb0be".to_owned(),
-            surface2: "#9ca0b0".to_owned(),
+            rosewater: "#dc8a78",
+            lavender: "#7287fd",
+            text: "#4c4f69",
+            subtext1: "#5c5f77",
+            subtext0: "#6c6f85",
+            overlay2: "#7c7f93",
+            overlay1: "#8c8fa1",
+            overlay0: "#9ca0b0",
+            surface2: "#acb0be",
+            surface1: "#bcc0cc",
+            surface0: "#ccd0da",
+            base: "#eff1f5",
+            mantle: "#e6e9ef",
+            crust: "#dce0e8",
+        }
+    }
+
+    fn catpuccin_frappe() -> Self {
+        Self {
+            rosewater: "#f2d5cf",
+            lavender: "#babbf1",
+            text: "#c6d0f5",
+            subtext1: "#b5bfe2",
+            subtext0: "#a5adce",
+            overlay2: "#949cbb",
+            overlay1: "#838ba7",
+            overlay0: "#737994",
+            surface2: "#626880",
+            surface1: "#51576d",
+            surface0: "#414559",
+            base: "#303446",
+            mantle: "#292c3c",
+            crust: "#232634",
         }
     }
 }
@@ -168,6 +210,30 @@ impl Crossword {
         let grid = self.grid;
 
         move |cell, letter| grid.with(|g| g.set_cell(cell, letter))
+    }
+
+    fn corners_at(&self) -> impl Fn((usize, usize)) -> Corners + Copy {
+        let grid = self.grid;
+        move |cell| {
+            grid.with(|grid| {
+                let at = |c| grid.get(c).map_or(true, |c| c.is_none());
+                let top = cell.1 == 0 || at((cell.0, cell.1 - 1));
+                let left = cell.0 == 0 || at((cell.0 - 1, cell.1));
+                let right = at((cell.0 + 1, cell.1));
+                let bottom = at((cell.0, cell.1 + 1));
+                let top_left = cell.1 == 0 || cell.0 == 0 || at((cell.0 - 1, cell.1 - 1));
+                let top_right = cell.1 == 0 || at((cell.0 + 1, cell.1 - 1));
+                let bottom_left = cell.0 == 0 || at((cell.0 - 1, cell.1 + 1));
+                let bottom_right = at((cell.0 + 1, cell.1 + 1));
+
+                Corners {
+                    top_left: top && left,
+                    top_right: top && right,
+                    bottom_left: bottom && left,
+                    bottom_right: bottom && right,
+                }
+            })
+        }
     }
 
     fn answer_id_at(&self) -> impl Fn((usize, usize)) -> Option<usize> + Copy {
@@ -457,8 +523,16 @@ impl Selection {
     }
 }
 
+fn log(is_across: impl Fn() -> bool + Copy + 'static) {
+    if is_across() {
+        console_log("animation frame");
+        request_animation_frame(move || log(is_across));
+    }
+}
 #[component]
 pub fn App(cx: Scope) -> impl IntoView {
+    // set_interval_with_handle(|| console_log("test"), duration);
+
     let crossword = Crossword::new(cx);
     provide_context(cx, crossword);
     let selection = Selection::new(cx);
@@ -600,7 +674,7 @@ pub fn App(cx: Scope) -> impl IntoView {
                 <Header/>
                 <Crossword on:focusout=remove_selection/>
             </div>
-            <button on:click=fill_blacks></button>
+            <button on:click=fill_blacks>"Fill blacks"</button>
             <Dialog/>
         </div>
     }
@@ -623,10 +697,13 @@ pub fn Crossword(cx: Scope) -> impl IntoView {
     let display_cells = crossword.display_cells();
     let cells = Signal::derive(cx, display_cells);
     let answer_id_at = crossword.answer_id_at();
+    let corners_at = crossword.corners_at();
     let hide_caret = selection.hide_caret();
     let active_slot = selection.active_slot;
     let caret_cell = Signal::derive(cx, selection.caret_cell());
     let is_across = selection.is_across();
+
+    create_effect(cx, move |_| log(is_across));
 
     let click_cell = selection.click_cell(crossword.get_slot(), crossword.cell_exists());
 
@@ -635,6 +712,7 @@ pub fn Crossword(cx: Scope) -> impl IntoView {
             <Cells
                 cells=cells
                 answer_id_at=answer_id_at
+                corners_at=corners_at
                 click_cell=click_cell
                 caret_cell=caret_cell
             />
@@ -645,16 +723,18 @@ pub fn Crossword(cx: Scope) -> impl IntoView {
 }
 
 #[component]
-pub fn Cells<A, O>(
+pub fn Cells<A, O, C>(
     cx: Scope,
     cells: Signal<Vec<((usize, usize), Option<Cell>)>>,
     answer_id_at: A,
+    corners_at: C,
     click_cell: O,
     caret_cell: Signal<Option<(usize, usize)>>,
 ) -> impl IntoView
 where
     A: Fn((usize, usize)) -> Option<usize> + 'static + Copy,
     O: Fn((usize, usize)) + 'static + Copy,
+    C: Fn((usize, usize)) -> Corners + 'static + Copy,
 {
     view! { cx,
         <For
@@ -663,11 +743,19 @@ where
             view=move |cx, (position, cell)| {
                 cell.map(|cell| {
                     let answer_id = Signal::derive(cx, move || answer_id_at(position));
+                    let corners = Signal::derive(cx, move || corners_at(position));
+                    let on_mouseover = move |ev: MouseEvent| {
+                        if ev.buttons() == 1 && caret_cell().map_or(true, |c| c != position) {
+                            click_cell(position);
+                        }
+                    };
                     view! { cx,
                         <Letter
                             on:click=move |ev| click_cell(position)
+                            on:mouseover=on_mouseover
                             letter=cell.letter.into()
                             answer_id=answer_id
+                            corners=corners
                             position=position
                         />
                     }
@@ -682,6 +770,7 @@ pub fn Letter(
     cx: Scope,
     letter: Signal<char>,
     answer_id: Signal<Option<usize>>,
+    corners: Signal<Corners>,
     position: (usize, usize),
 ) -> impl IntoView {
     let entered = create_rw_signal(cx, ());
@@ -722,19 +811,36 @@ pub fn Letter(
 
     let style = move || format!("--x:{};--y:{}", position.0, position.1);
 
+    let corner_bottom_left = move || corners().bottom_left;
+    let corner_bottom_right = move || corners().bottom_right;
+    let corner_top_left = move || corners().top_left;
+    let corner_top_right = move || corners().top_right;
+
     view! { cx,
-        <div tabindex=1 class="cell" style=style _ref=node_ref>
-            {move || {
-                answer_id()
-                    .map(|id| {
-                        view! { cx, <span class="answer-id">{id}</span> }
-                    })
-            }}
+        <div
+            tabindex=1
+            class="cell"
+            style=style
+            _ref=node_ref
+            class:corner-bottom-left=corner_bottom_left
+            class:corner-bottom-right=corner_bottom_right
+            class:corner-top-left=corner_top_left
+            class:corner-top-right=corner_top_right
+        >
+            <span class="answer-id">{answer_id}</span>
             <span class="letter" class:enter=is_entering on:animationend=after_enter>
                 {letter}
             </span>
         </div>
     }
+}
+
+#[derive(Clone, Copy)]
+pub struct Corners {
+    top_left: bool,
+    top_right: bool,
+    bottom_left: bool,
+    bottom_right: bool,
 }
 
 #[component]
